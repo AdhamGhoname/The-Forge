@@ -17,4 +17,3 @@
 #vert VR_MULTIVIEW skybox.vert
 #include "skybox.vert.fsl"
 #end
-

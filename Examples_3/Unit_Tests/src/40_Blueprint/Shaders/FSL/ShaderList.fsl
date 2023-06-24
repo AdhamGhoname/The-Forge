@@ -1,0 +1,15 @@
+#frag depth_passthrough.frag
+#include "depth_passthrough.frag.fsl"
+#end
+
+#vert depth_passthrough.vert
+#include "depth_passthrough.vert.fsl"
+#end
+
+#frag blueprint.frag
+#include "blueprint.frag.fsl"
+#end
+
+#vert blueprint.vert
+#include "blueprint.vert.fsl"
+#end
