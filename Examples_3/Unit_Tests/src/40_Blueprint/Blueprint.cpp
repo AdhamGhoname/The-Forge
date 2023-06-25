@@ -350,7 +350,7 @@ public:
 		pCamera = tf_placement_new<Camera>(tf_calloc(1, sizeof(Camera)));
 		*pCamera = Camera(Vector3(0.0f, 0.0f, -5.0f),
 			Vector3(0.0f, 0.0f, 1.0f),
-			"persp",
+			"ortho",
 			0.1f,
 			1000.0f,
 			45.0f,

@@ -59,7 +59,7 @@ mat4 Camera::GetProjectionMatrix()
 	}
 	else
 	{
-		return Matrix4::orthographic(-4.0f, 4.0f, -4.0f / this->aspect_ratio, 4.0f / this->aspect_ratio, this->nearZ, this->farZ);
+		return Matrix4::orthographic(-1.0f, 1.0f, -1.0f / this->aspect_ratio, 1.0f / this->aspect_ratio, this->nearZ, this->farZ);
 	}
 }
 
