@@ -35,9 +35,7 @@ struct UniformBlock {
 	Matrix4 mView;
 	Matrix4 mProjection;
 
-	Vector4 ScreenDimsAndThreshold;
-	Vector4 mLightDirections[MAX_DIRECTIONAL_LIGHTS];
-	Vector4 mCameraPosition;
+	Vector4 ScreenDimsWorldDims;
 };
 
 
@@ -262,8 +260,8 @@ public:
 
 
 
-		SamplerDesc samplerDesc = { FILTER_LINEAR,
-									FILTER_LINEAR,
+		SamplerDesc samplerDesc = { FILTER_NEAREST,
+									FILTER_NEAREST,
 									MIPMAP_MODE_NEAREST,
 									ADDRESS_MODE_REPEAT,
 									ADDRESS_MODE_REPEAT,
@@ -426,6 +424,8 @@ public:
 		{
 			removeResource(pUniformBuffer[i]);
 		}
+		removeResource(pVertexBufferQuad);
+
 
 		for (uint32_t i = 0; i < pMeshes.size(); i++) {
 			removeResource(pModelVertexBuffers[i]);
@@ -530,6 +530,7 @@ public:
 		{
 			removeSwapChain(pRenderer, pSwapChain);
 			removeRenderTarget(pRenderer, pDepthBuffer);
+			removeRenderTarget(pRenderer, pRenderTargetIntermediate);
 		}
 
 		if (pReloadDesc->mType & RELOAD_TYPE_SHADER)
@@ -599,7 +600,6 @@ public:
 		swapChainDesc.mImageCount = gImageCount;
 		swapChainDesc.mColorFormat = getRecommendedSwapchainFormat(true, true);
 		swapChainDesc.mEnableVsync = mSettings.mVSyncEnabled;
-		swapChainDesc.mFlags = SWAP_CHAIN_CREATION_FLAG_ENABLE_FOVEATED_RENDERING_VR;
 		::addSwapChain(pRenderer, &swapChainDesc, &pSwapChain);
 
 		return pSwapChain != NULL;
@@ -656,6 +656,7 @@ public:
 
 		RasterizerStateDesc modelRasterizerStateDesc = {};
 		modelRasterizerStateDesc.mCullMode = CULL_MODE_FRONT;
+		modelRasterizerStateDesc.mFillMode = FILL_MODE_WIREFRAME;
 
 		DepthStateDesc depthStateDesc = {};
 		depthStateDesc.mDepthTest = true;
@@ -681,6 +682,9 @@ public:
 
 
 		// 2nd pipeline
+
+		modelRasterizerStateDesc.mFillMode = FILL_MODE_SOLID;
+
 
 		vertexLayout.mAttribCount = 2;
 		vertexLayout.mAttribs[0].mSemantic = SEMANTIC_POSITION;
@@ -710,10 +714,6 @@ public:
 	void prepareDescriptorSets()
 	{
 		// Prepare descriptor sets
-		DescriptorData params[1] = {};
-		params[0].pName = "DepthTexture";
-		params[0].ppTextures = &pRenderTargetIntermediate->pTexture;
-		updateDescriptorSet(pRenderer, 0, pDescriptorSetTexture, 1, params);
 
 		for (uint32_t i = 0; i < gImageCount; ++i)
 		{
@@ -722,6 +722,11 @@ public:
 			params[0].ppBuffers = &pUniformBuffer[i];
 			updateDescriptorSet(pRenderer, i, pDescriptorSetUniforms, 1, params);
 		}
+
+		DescriptorData params[1] = {};
+		params[0].pName = "DepthTexture";
+		params[0].ppTextures = &pRenderTargetIntermediate->pTexture;
+		updateDescriptorSet(pRenderer, 0, pDescriptorSetTexture, 1, params);
 	}
 	
 	bool addIntermediateRenderTarget()
@@ -757,19 +762,19 @@ public:
 		gUniformData.mModel = pModelMatrix;
 		gUniformData.mView = mView;
 		gUniformData.mProjection = mProj;
-		gUniformData.ScreenDimsAndThreshold = Vector4(mSettings.mWidth, mSettings.mHeight, gThreshold, 0.0f);
+		gUniformData.ScreenDimsWorldDims = Vector4(mSettings.mWidth, mSettings.mHeight, 4.0f, 4.0f);
 		//gUniformData.mOrthoProjection = mat4::orthographic(-1.0f * pCamera->aspect_ratio, 1.0f * pCamera->aspect_ratio, -1.0f, 1.0f, 0.0f, 1.0f);
 
-		memset(gUniformData.mLightDirections, 0, sizeof gUniformData.mLightDirections);
-		//for (int i = 0; i < 8; i++) {
-		//	gUniformData.mLightDirections[i] = Vector4((i & 1 ? -1.0f : 1.0f), 
-		//											   (i >> 1 & 1 ? -1.0f : 1.0f), 
-		//											   (i >> 2 & 1 ? -1.0f : 1.0f),
-		//												1.0f);	
-		//}
-		gUniformData.mLightDirections[0] = Vector4(-2.0f, -1.0f, 1.0f, 1.0f);
-		gUniformData.mLightDirections[1] = Vector4(2.0f, 1.0f, 1.0f, 1.0f);
-		gUniformData.mCameraPosition = Vector4(pCamera->position, 0.0f);
+		//memset(gUniformData.mLightDirections, 0, sizeof gUniformData.mLightDirections);
+		////for (int i = 0; i < 8; i++) {
+		////	gUniformData.mLightDirections[i] = Vector4((i & 1 ? -1.0f : 1.0f), 
+		////											   (i >> 1 & 1 ? -1.0f : 1.0f), 
+		////											   (i >> 2 & 1 ? -1.0f : 1.0f),
+		////												1.0f);	
+		////}
+		//gUniformData.mLightDirections[0] = Vector4(-2.0f, -1.0f, 1.0f, 1.0f);
+		//gUniformData.mLightDirections[1] = Vector4(2.0f, 1.0f, 1.0f, 1.0f);
+		//gUniformData.mCameraPosition = Vector4(pCamera->position, 0.0f);
 	}
 
 	void Draw() {
@@ -782,16 +787,12 @@ public:
 		uint32_t swapchainImageIndex;
 		acquireNextImage(pRenderer, pSwapChain, pImageAcquiredSemaphore, NULL, &swapchainImageIndex);
 
-		RenderTarget* pRenderTarget = pRenderTargetIntermediate;
-		RenderTarget* pScreenRenderTarget = pSwapChain->ppRenderTargets[swapchainImageIndex];
-		Semaphore*    pRenderCompleteSemaphore = pRenderCompleteSemaphores[gFrameIndex];
-		Fence*        pRenderCompleteFence = pRenderCompleteFences[gFrameIndex];
-
 		// Stall if CPU is running "Swap Chain Buffer Count" frames ahead of GPU
 		FenceStatus fenceStatus;
-		getFenceStatus(pRenderer, pRenderCompleteFence, &fenceStatus);
+		Fence*      pNextFence = pRenderCompleteFences[gFrameIndex];
+		getFenceStatus(pRenderer, pNextFence, &fenceStatus);
 		if (fenceStatus == FENCE_STATUS_INCOMPLETE)
-			waitForFences(pRenderer, 1, &pRenderCompleteFence);
+			waitForFences(pRenderer, 1, &pNextFence);
 
 		resetCmdPool(pRenderer, pCmdPools[gFrameIndex]);
 
@@ -801,23 +802,27 @@ public:
 		*(UniformBlock*)viewProjCbv.pMappedData = gUniformData;
 		endUpdateResource(&viewProjCbv, NULL);
 
+		RenderTarget* pRenderTarget = pRenderTargetIntermediate;
+		RenderTarget* pScreenRenderTarget = pSwapChain->ppRenderTargets[swapchainImageIndex];
+		Semaphore*    pRenderCompleteSemaphore = pRenderCompleteSemaphores[gFrameIndex];
+		Fence*        pRenderCompleteFence = pRenderCompleteFences[gFrameIndex];
+
+		LoadActionsDesc loadActions = {};
+		loadActions.mLoadActionsColor[0] = LOAD_ACTION_CLEAR;
+		loadActions.mLoadActionDepth = LOAD_ACTION_CLEAR;
+		loadActions.mClearColorValues[0] = pRenderTarget->mClearValue;
 
 		Cmd* cmd = pCmds[gFrameIndex];
 		beginCmd(cmd);
-
 
 		RenderTargetBarrier barriers[] = {
 			{ pRenderTarget, RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RESOURCE_STATE_RENDER_TARGET },
 			{ pScreenRenderTarget, RESOURCE_STATE_PRESENT, RESOURCE_STATE_RENDER_TARGET },
 		};
 
-		cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 1, barriers);
+		cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 2, barriers);
 
 		// simply record the screen cleaning command
-		LoadActionsDesc loadActions = {};
-		loadActions.mLoadActionsColor[0] = LOAD_ACTION_CLEAR;
-		loadActions.mLoadActionDepth = LOAD_ACTION_CLEAR;
-		loadActions.mClearColorValues[0] = { 0.0f, 0.25f, 0.28f, 1.0f };
 		loadActions.mClearDepth.depth = 0.0f;
 		cmdBindRenderTargets(cmd, 1, &pRenderTarget, pDepthBuffer, &loadActions, NULL, NULL, -1, -1);
 		cmdSetViewport(cmd, 0.0f, 0.0f, (float)pRenderTarget->mWidth, (float)pRenderTarget->mHeight, 1.0f, 0.0f);

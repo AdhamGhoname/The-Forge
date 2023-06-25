@@ -27,8 +27,8 @@
 
 // UPDATE_FREQ_NONE
 #ifdef BLUEPRINT_SHADER
-RES(Tex2D(float4), DepthTexture, UPDATE_FREQ_NONE, t1, binding = 1);
-RES(SamplerState,  uSampler0, UPDATE_FREQ_NONE, s0, binding = 2);
+	RES(Tex2D(float4), DepthTexture, UPDATE_FREQ_NONE, t1, binding = 1);
+	RES(SamplerState,  uSampler0, UPDATE_FREQ_NONE, s0, binding = 2);
 #endif
 
 CBUFFER(uniformBlock, UPDATE_FREQ_PER_FRAME, b0, binding = 0)
@@ -36,7 +36,7 @@ CBUFFER(uniformBlock, UPDATE_FREQ_PER_FRAME, b0, binding = 0)
     DATA(float4x4, mModel, None);
     DATA(float4x4, mView, None);
     DATA(float4x4, mProj, None);
-	DATA(float4, ScreenDimsAndThreshold, None);
+	DATA(float4, ScreenDimsWorldDims, None);
 };
 
 #endif

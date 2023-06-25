@@ -29,6 +29,10 @@
 #endif
 #include "resources.h.fsl"
 
+#define SS_GRID_CELL_SIZE 20.0f
+#define WS_GRID_CELL_SIZE 0.1f
+
+
 STRUCT(VSOutput)
 {
 	DATA(float4, Position, SV_Position);
@@ -38,6 +42,43 @@ STRUCT(VSOutput)
 float4 PS_MAIN( VSOutput In )
 {
     INIT_MAIN;
-    float4 Out = SampleTex2D(Get(DepthTexture), Get(uSampler0), In.UV.rg);
+	float3 delta = float3(1.0f / Get(ScreenDimsWorldDims).rg, 0.0f);
+
+    float4 dxyz = SampleTex2D(Get(DepthTexture), Get(uSampler0), In.UV.rg);
+
+    float o = dxyz.w;
+	float x = SampleTex2D(Get(DepthTexture), Get(uSampler0), In.UV.rg + delta.xz).w;
+	float y = SampleTex2D(Get(DepthTexture), Get(uSampler0), In.UV.rg + delta.zy).w;
+	float ox = x - o;
+	float oy = y - o;
+
+	float2 coord = Get(ScreenDimsWorldDims).xy * (0.5f - In.UV.xy);
+
+	float4 bg = float4(.07, .3, .7, 1.);
+
+	//small lines
+	float2 a = smoothstep(0.07f, 0.0f, abs(0.5f - frac(coord / SS_GRID_CELL_SIZE)));
+    bg += 0.125f * (a.x + a.y);
+
+    //big lines
+    float2 b = smoothstep(0.01f, 0.0f, abs(0.5f - frac(coord / (SS_GRID_CELL_SIZE*5.0f))));
+    bg += 0.25 * (b.x + b.y);
+
+	// add geometry grid
+
+	float3 worldCoord = (0.5f - dxyz.xyz) * Get(ScreenDimsWorldDims).z;
+
+	float3 c = step(abs(0.5f - frac(worldCoord / WS_GRID_CELL_SIZE)), f3(0.45f));
+	//bg += 0.5 * min(c.x, c.z);
+
+
+
+	float4 fg = float4(206, 216, 247, 255) / 255.0f;
+
+	float4 Out = lerp(bg, fg, 1.0f - step(abs(dot(dxyz.xyz, f3(1.0f))), 0.01f));
+
+
+
+	Out = pow(Out, f4(2.2f));
     RETURN(Out);
 }
