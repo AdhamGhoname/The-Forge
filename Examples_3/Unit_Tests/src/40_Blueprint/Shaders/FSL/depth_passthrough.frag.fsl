@@ -37,6 +37,6 @@ float4 PS_MAIN( VSOutput In )
 {
     INIT_MAIN;
 	float depth = mul(mul(Get(mView), Get(mModel)), float4(In.WorldPosition.xyz, 1.0f)).z;
-    float4 Out = float4(In.WorldPosition.xyz / Get(ScreenDimsWorldDims).z, depth);
+    float4 Out = float4(In.WorldPosition.xyz, depth);
     RETURN(Out);
 }

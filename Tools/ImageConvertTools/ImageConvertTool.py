@@ -113,6 +113,7 @@ def TexConvertFunction(basisu, filename, options):
 	print("Converting [" + filename + "]")
 	DEVNULL = open(os.devnull, 'wb')
 	p = subprocess.call(command, stdout=DEVNULL, stderr=DEVNULL)
+	print(p)
 	return
 
 def KTXCompressFunction(compress, output, filename, options):

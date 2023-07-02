@@ -800,7 +800,7 @@ public:
 		gFrameIndex = (gFrameIndex + 1) % gImageCount;
 	}
 
-	const char* GetName() { return "39_EngineTest"; }
+	const char* GetName() { return "39_Halftone"; }
 };
 
 DEFINE_APPLICATION_MAIN(Test)

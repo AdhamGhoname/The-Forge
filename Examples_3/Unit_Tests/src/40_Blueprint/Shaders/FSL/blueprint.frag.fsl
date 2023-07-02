@@ -66,7 +66,7 @@ float4 PS_MAIN( VSOutput In )
 
 	// add geometry grid
 
-	float3 worldCoord = (0.5f - dxyz.xyz) * Get(ScreenDimsWorldDims).z;
+	float3 worldCoord = dxyz.xyz;
 
 	float3 c = step(abs(0.5f - frac(worldCoord / WS_GRID_CELL_SIZE)), f3(0.45f));
 	//bg += 0.5 * min(c.x, c.z);

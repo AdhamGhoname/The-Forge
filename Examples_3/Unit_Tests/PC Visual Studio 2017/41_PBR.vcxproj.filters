@@ -1,0 +1,54 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="..\..\..\Common_3\Application\UI\NoesisUI.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\41_PBR\PBR.cpp" />
+    <ClCompile Include="..\src\41_PBR\Camera\Camera.cpp">
+      <Filter>Camera</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Sources">
+      <UniqueIdentifier>{c0850f7e-def7-4849-84e9-848e05546bb9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{cbf570a5-ee1c-4477-895f-9f790ac47f13}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders\FSL">
+      <UniqueIdentifier>{eb9e9932-1c9d-48c6-b9e8-86a2d85230d6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Camera">
+      <UniqueIdentifier>{4124f4f8-e0e3-4b1e-a000-d7adb15341c8}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\Common_3\Application\UI\NoesisUI.h">
+      <Filter>Sources</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\41_PBR\Camera\Camera.h">
+      <Filter>Camera</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <FSLShader Include="..\src\41_PBR\Shaders\FSL\blueprint.frag.fsl">
+      <Filter>Shaders\FSL</Filter>
+    </FSLShader>
+    <FSLShader Include="..\src\41_PBR\Shaders\FSL\blueprint.vert.fsl">
+      <Filter>Shaders\FSL</Filter>
+    </FSLShader>
+    <FSLShader Include="..\src\41_PBR\Shaders\FSL\depth_passthrough.frag.fsl">
+      <Filter>Shaders\FSL</Filter>
+    </FSLShader>
+    <FSLShader Include="..\src\41_PBR\Shaders\FSL\depth_passthrough.vert.fsl">
+      <Filter>Shaders\FSL</Filter>
+    </FSLShader>
+    <FSLShader Include="..\src\41_PBR\Shaders\FSL\resources.h.fsl">
+      <Filter>Shaders\FSL</Filter>
+    </FSLShader>
+    <FSLShader Include="..\src\41_PBR\Shaders\FSL\ShaderList.fsl">
+      <Filter>Shaders\FSL</Filter>
+    </FSLShader>
+  </ItemGroup>
+</Project>

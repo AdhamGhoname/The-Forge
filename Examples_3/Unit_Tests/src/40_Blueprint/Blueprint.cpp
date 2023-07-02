@@ -350,7 +350,7 @@ public:
 		pCamera = tf_placement_new<Camera>(tf_calloc(1, sizeof(Camera)));
 		*pCamera = Camera(Vector3(0.0f, 0.0f, -5.0f),
 			Vector3(0.0f, 0.0f, 1.0f),
-			"ortho",
+			"persp",
 			0.1f,
 			1000.0f,
 			45.0f,
@@ -669,9 +669,9 @@ public:
 		pipelineSettings.mPrimitiveTopo = PRIMITIVE_TOPO_TRI_LIST;
 		pipelineSettings.mRenderTargetCount = 1;
 		pipelineSettings.pDepthState = &depthStateDesc;
-		pipelineSettings.pColorFormats = &pSwapChain->ppRenderTargets[0]->mFormat;
-		pipelineSettings.mSampleCount = pSwapChain->ppRenderTargets[0]->mSampleCount;
-		pipelineSettings.mSampleQuality = pSwapChain->ppRenderTargets[0]->mSampleQuality;
+		pipelineSettings.pColorFormats = &pRenderTargetIntermediate->mFormat;
+		pipelineSettings.mSampleCount = pRenderTargetIntermediate->mSampleCount;
+		pipelineSettings.mSampleQuality = pRenderTargetIntermediate->mSampleQuality;
 		pipelineSettings.mDepthStencilFormat = pDepthBuffer->mFormat;
 		pipelineSettings.pRootSignature = pRootSignature;
 		pipelineSettings.pShaderProgram = pDepthShader;
@@ -684,6 +684,9 @@ public:
 		// 2nd pipeline
 
 		modelRasterizerStateDesc.mFillMode = FILL_MODE_SOLID;
+		pipelineSettings.pColorFormats = &pSwapChain->ppRenderTargets[0]->mFormat;
+		pipelineSettings.mSampleCount = pSwapChain->ppRenderTargets[0]->mSampleCount;
+		pipelineSettings.mSampleQuality = pSwapChain->ppRenderTargets[0]->mSampleQuality;
 
 
 		vertexLayout.mAttribCount = 2;
@@ -737,7 +740,7 @@ public:
 		rtDesc.mClearValue = { { 0.001f, 0.001f, 0.001f, 0.001f } }; // This is a temporary workaround for AMD cards on macOS. Setting this to (0,0,0,0) will introduce weird behavior.
 		rtDesc.mDepth = 1;
 		rtDesc.mDescriptors = DESCRIPTOR_TYPE_TEXTURE;
-		rtDesc.mFormat = getRecommendedSwapchainFormat(true, true);
+		rtDesc.mFormat = TinyImageFormat_R32G32B32A32_SFLOAT;
 		rtDesc.mStartState = RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 		rtDesc.mHeight = mSettings.mHeight;
 		rtDesc.mSampleCount = SAMPLE_COUNT_1;
