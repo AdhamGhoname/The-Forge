@@ -109,7 +109,7 @@ def compile_binary(platform: Platforms, debug: bool, binary: ShaderBinary, src, 
             params += ['/I', fsl_basepath, '/Fo', compiled_filepath, src]
 
         elif platform == Platforms.DIRECT3D12:
-            if debug: params += ['/Zi', '-Qembed_debug']
+            if debug: params += ['/Zi', '-Qembed_debug', 'O0']
             params += ['/T', util_shadertarget_dx(binary.stage, binary.target)]
             params += ['/I', fsl_basepath, '/Fo', compiled_filepath, src]
 

@@ -1,15 +1,15 @@
-#frag depth_passthrough.frag
-#include "depth_passthrough.frag.fsl"
+#frag gpass.frag
+#include "gpass.frag.fsl"
 #end
 
-#vert depth_passthrough.vert
-#include "depth_passthrough.vert.fsl"
+#vert gpass.vert
+#include "gpass.vert.fsl"
 #end
 
-#frag blueprint.frag
-#include "blueprint.frag.fsl"
+#frag pbr.frag
+#include "pbr.frag.fsl"
 #end
 
-#vert blueprint.vert
-#include "blueprint.vert.fsl"
+#vert pbr.vert
+#include "pbr.vert.fsl"
 #end

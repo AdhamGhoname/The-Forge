@@ -112,8 +112,8 @@ def TexConvertFunction(basisu, filename, options):
 	
 	print("Converting [" + filename + "]")
 	DEVNULL = open(os.devnull, 'wb')
-	p = subprocess.call(command, stdout=DEVNULL, stderr=DEVNULL)
-	print(p)
+	p = subprocess.call(command, stdout=DEVNULL)
+	print(filename)
 	return
 
 def KTXCompressFunction(compress, output, filename, options):
@@ -136,7 +136,7 @@ def ExecCmdFixAll():
 	start = time.time()
 	
 	basisu = "basisu.exe"
-	ktxcompress = "ImageConvertTools/img2ktx.exe"
+	ktxcompress = "img2ktx.exe"
 	
 	relative_input_dir = ""
 	relative_output_dir = ""
@@ -172,7 +172,7 @@ def ExecCmdFixAll():
 				files_to_fix.append(filename)
 	
 	for file in files_to_fix:
-		options = "-linear -level 4 "
+		options = "-linear -comp_level 4 "
 		if "normal" in file.lower():			
 			options = options + "-userdata0 1 " + "-seperate_rg_to_color_alpha "
 		ext = os.path.splitext(file)[-1].lower()

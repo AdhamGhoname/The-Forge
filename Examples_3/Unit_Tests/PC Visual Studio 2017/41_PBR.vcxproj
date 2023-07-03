@@ -37,10 +37,10 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <FSLShader Include="..\src\41_PBR\Shaders\FSL\blueprint.frag.fsl" />
-    <FSLShader Include="..\src\41_PBR\Shaders\FSL\blueprint.vert.fsl" />
-    <FSLShader Include="..\src\41_PBR\Shaders\FSL\depth_passthrough.frag.fsl" />
-    <FSLShader Include="..\src\41_PBR\Shaders\FSL\depth_passthrough.vert.fsl" />
+    <FSLShader Include="..\src\41_PBR\Shaders\FSL\pbr.frag.fsl" />
+    <FSLShader Include="..\src\41_PBR\Shaders\FSL\pbr.vert.fsl" />
+    <FSLShader Include="..\src\41_PBR\Shaders\FSL\gpass.frag.fsl" />
+    <FSLShader Include="..\src\41_PBR\Shaders\FSL\gpass.vert.fsl" />
     <FSLShader Include="..\src\41_PBR\Shaders\FSL\resources.h.fsl" />
     <FSLShader Include="..\src\41_PBR\Shaders\FSL\ShaderList.fsl" />
   </ItemGroup>
@@ -117,6 +117,10 @@
     </Manifest>
     <PostBuildEvent>
       <Command>xcopy /Y /S /D "$(ProjectDir)..\UnitTestResources\Textures\*.dds" "$(OutDir)Textures\"
+xcopy /Y /S /D "$(ProjectDir)..\UnitTestResources\Textures\*.ktx" "$(OutDir)Textures\"
+xcopy /Y /S /D "$(ProjectDir)..\UnitTestResources\Textures\PBR\*.ktx" "$(OutDir)Textures\PBR\"
+xcopy /Y /S /D "$(ProjectDir)..\UnitTestResources\Textures\PBR\*.basis" "$(OutDir)Textures\PBR\"
+xcopy /Y /S /D "$(ProjectDir)..\UnitTestResources\Textures\PBR\*.dds" "$(OutDir)Textures\PBR\"
 xcopy /Y /S /D "$(ProjectDir)..\UnitTestResources\Textures\*.png" "$(OutDir)Textures\"
 xcopy /Y /S /D "$(ProjectDir)..\UnitTestResources\Textures\*.jpg" "$(OutDir)Textures\"
 xcopy /Y /S /D "$(ProjectDir)..\UnitTestResources\Textures\*.jpeg" "$(OutDir)Textures\"

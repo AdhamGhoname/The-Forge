@@ -1,0 +1,93 @@
+/*
+ * Copyright (c) 2017-2022 The Forge Interactive Inc.
+ * 
+ * This file is part of The-Forge
+ * (see https://github.com/ConfettiFX/The-Forge).
+ * 
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+*/
+
+// Shader for Skybox in Unit Test 01 - Transformations
+
+#include "resources.h.fsl"
+
+RES(Tex2D(float4), AlbedoTexture, UPDATE_FREQ_NONE, t1, binding = 1);
+RES(Tex2D(float4), MetallicTexture, UPDATE_FREQ_NONE, t2, binding = 1);
+RES(Tex2D(float4), RoughnessTexture, UPDATE_FREQ_NONE, t3, binding = 1);
+RES(Tex2D(float4), AOTexture, UPDATE_FREQ_NONE, t4, binding = 1);
+RES(Tex2D(float4), NormalTexture, UPDATE_FREQ_NONE, t5, binding = 1);
+
+RES(SamplerState,  uSampler0, UPDATE_FREQ_NONE, s0, binding = 2);
+
+STRUCT(VSOutput)
+{
+	DATA(float4, Position, SV_Position);
+	DATA(float4, WorldPosition, POSITION);
+	DATA(float4, Normal,   NORMAL);
+	DATA(float4, Tangent,   TANGENT);
+	DATA(float4, UV, TEXCOORD);
+};
+
+STRUCT(PSOutput)
+{
+	DATA(float4, Albedo, SV_Target0);
+	DATA(float4, MaterialProps, SV_Target1);
+	DATA(float4, NormalDepth, SV_Target2);
+};
+
+float3 SampleNormalFromMap(VSOutput In) {
+	float3 N = normalize(In.Normal.xyz);
+	float3 T = normalize(In.Tangent.xyz);
+	T = normalize(T - dot(T, N) * N);
+
+	float3 B = cross(N, T);
+
+	float3x3 TBN = float3x3(T, B, N);
+	float3 sampledNormal = SampleTex2D(Get(NormalTexture), Get(uSampler0), In.UV.rg).xyz;
+	sampledNormal = sampledNormal * 2.0f - 1.0f;
+	float3 normal = normalize(mul(TBN, sampledNormal));
+	normal = (normal + 1.0f) / 2.0f;
+	return normal.xyz;
+}
+
+float3 NormalFromVertexAttrib(VSOutput In) {
+	float3 normal = normalize(In.Normal).xyz;
+	normal = (normal + 1.0f) / 2.0f;
+	return normal;
+}
+
+PSOutput PS_MAIN( VSOutput In )
+{
+    INIT_MAIN;
+	float depth = In.Position.z;
+
+    float4 albedo = SampleTex2D(Get(AlbedoTexture), Get(uSampler0), In.UV.rg);
+	float metallic = SampleTex2D(Get(MetallicTexture), Get(uSampler0), In.UV.rg).r;
+	float roughness = SampleTex2D(Get(RoughnessTexture), Get(uSampler0), In.UV.rg).r;
+	float ao = SampleTex2D(Get(AOTexture), Get(uSampler0), In.UV.rg).r;
+
+	float3 normal = NormalFromVertexAttrib(In) + 0.0000001f * SampleNormalFromMap(In);
+	//float3 normal = SampleNormalFromMap(In);
+
+	PSOutput Out;
+	Out.Albedo = albedo;
+	Out.MaterialProps = float4(metallic, roughness, ao, 1.0f);
+	Out.NormalDepth = float4(normal, depth);
+
+    RETURN(Out);
+}

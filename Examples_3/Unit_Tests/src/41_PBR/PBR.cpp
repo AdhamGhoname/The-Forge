@@ -23,20 +23,40 @@
 #include "../../../../Common_3/Utilities/Math/MathTypes.h"
 #include "../../../../Common_3/Utilities/Interfaces/IMemory.h"
 
+#define GBUFFER_RT_COUNT 3
+#define POINT_LIGHT_COUNT 4
+
+struct PointLight {
+	Vector3 position;
+	float attenuation;
+	Vector4 baseColor;
+};
+
 struct UniformBlock {
 	Matrix4 mModel;
 	Matrix4 mView;
-	Matrix4 mProjection;
+	Matrix4 mProj;
 
-	Vector4 ScreenDimsWorldDims;
+	Matrix4 mModelInv;
+	Matrix4 mViewInv;
+	Matrix4 mProjInv;
+
+	Vector4 cameraPosition;
+	Vector4 ScreenDims;
+
+	PointLight lights[POINT_LIGHT_COUNT];
 };
+
 
 struct Material {
 	Texture* albedo;
+	Texture* normal;
 	Texture* roughness;
 	Texture* metallic;
 	Texture* ao;
 };
+
+Material gMaterial;
 
 
 const uint32_t gImageCount = 3;
@@ -51,7 +71,7 @@ Cmd*     pCmds[gImageCount] = { NULL };
 
 SwapChain*    pSwapChain = NULL;
 RenderTarget* pDepthBuffer = NULL;
-RenderTarget* pRenderTargetIntermediate;
+RenderTarget* pRenderTargetGBuffer[GBUFFER_RT_COUNT];
 Fence*        pRenderCompleteFences[gImageCount] = { NULL };
 Semaphore*    pImageAcquiredSemaphore = NULL;
 Semaphore*    pRenderCompleteSemaphores[gImageCount] = { NULL };
@@ -67,7 +87,8 @@ const uint32_t gSamplerCount = 1;
 Sampler* pSampler;
 
 RootSignature* pRootSignature = NULL;
-DescriptorSet* pDescriptorSetTextures = { NULL };
+DescriptorSet* pDescriptorSetGBuffer = { NULL };
+DescriptorSet* pDescriptorSetMaterial = { NULL };
 DescriptorSet* pDescriptorSetUniforms = { NULL };
 
 uint32_t gFrameIndex = 0;
@@ -77,6 +98,10 @@ UniformBlock     gUniformData;
 
 Camera* pCamera;
 UIComponent*    pGuiWindow = NULL;
+
+TinyImageFormat gGBufferColorFormats[] = { TinyImageFormat_R32G32B32A32_SFLOAT,
+								TinyImageFormat_R32G32B32A32_SFLOAT,
+								TinyImageFormat_R32G32B32A32_SFLOAT };
 
 static float gThreshold = -0.2f;
 
@@ -88,7 +113,7 @@ uint32_t gFontID = 0;
 struct Vertex {
 	Vector4 Position;
 	Vector4 Normal;
-//	Vector4 Tangent;
+	Vector4 Tangent;
 	Vector4 uv;
 };
 
@@ -112,7 +137,7 @@ struct TextureStruct {
 DECLARE_RENDERER_FUNCTION(void, mapBuffer, Renderer* pRenderer, Buffer* pBuffer, ReadRange* pRange)
 DECLARE_RENDERER_FUNCTION(void, unmapBuffer, Renderer* pRenderer, Buffer* pBuffer)
 
-class Test : public IApp {
+class DeferredPBR : public IApp {
 public:
 	bool Init() {
 		// FILE PATHS
@@ -180,16 +205,43 @@ public:
 		quadUVDesc.ppBuffer = &pVertexBufferQuad;
 		addResource(&quadUVDesc, NULL);
 
-		/// TODO: Load model
 
-		char modelPath[256];
-		fsAppendPathComponent(fsGetResourceDirectory(RD_MESHES), "Octane.fbx", modelPath);
+		// Loading material textures
 
+		TextureLoadDesc textureDesc = {};
+		textureDesc.pFileName = "PBR/metal_0002_color_4k";
+		textureDesc.ppTexture = &gMaterial.albedo;
+		textureDesc.mCreationFlag = TEXTURE_CREATION_FLAG_SRGB;
+		textureDesc.mContainer = TEXTURE_CONTAINER_BASIS;
+		addResource(&textureDesc, NULL);
 
-		///
+		textureDesc.pFileName = "PBR/metal_0002_metallic_4k";
+		textureDesc.ppTexture = &gMaterial.metallic;
+		textureDesc.mCreationFlag = TEXTURE_CREATION_FLAG_SRGB;
+		textureDesc.mContainer = TEXTURE_CONTAINER_BASIS;
+		addResource(&textureDesc, NULL);
+
+		textureDesc.pFileName = "PBR/metal_0002_roughness_4k";
+		textureDesc.ppTexture = &gMaterial.roughness;
+		textureDesc.mCreationFlag = TEXTURE_CREATION_FLAG_SRGB;
+		textureDesc.mContainer = TEXTURE_CONTAINER_BASIS;
+		addResource(&textureDesc, NULL);
+
+		textureDesc.pFileName = "PBR/metal_0002_ao_4k";
+		textureDesc.ppTexture = &gMaterial.ao;
+		textureDesc.mCreationFlag = TEXTURE_CREATION_FLAG_SRGB;
+		textureDesc.mContainer = TEXTURE_CONTAINER_BASIS;
+		addResource(&textureDesc, NULL);
+
+		textureDesc.pFileName = "PBR/metal_0002_normal_directx_4k";
+		textureDesc.ppTexture = &gMaterial.normal;
+		textureDesc.mCreationFlag = TEXTURE_CREATION_FLAG_SRGB;
+		textureDesc.mContainer = TEXTURE_CONTAINER_BASIS;
+		addResource(&textureDesc, NULL);
+
 
 		VertexLayout modelLayout;
-		modelLayout.mAttribCount = 3;
+		modelLayout.mAttribCount = 4;
 
 		modelLayout.mAttribs[0].mSemantic = SEMANTIC_POSITION;
 		modelLayout.mAttribs[0].mFormat = TinyImageFormat_R32G32B32A32_SFLOAT;
@@ -203,15 +255,21 @@ public:
 		modelLayout.mAttribs[1].mLocation = 1;
 		modelLayout.mAttribs[1].mOffset = offsetof(Vertex, Normal);
 
-		modelLayout.mAttribs[2].mSemantic = SEMANTIC_TEXCOORD0;
+		modelLayout.mAttribs[2].mSemantic = SEMANTIC_TANGENT;
 		modelLayout.mAttribs[2].mFormat = TinyImageFormat_R32G32B32A32_SFLOAT;
 		modelLayout.mAttribs[2].mBinding = 0;
 		modelLayout.mAttribs[2].mLocation = 2;
-		modelLayout.mAttribs[2].mOffset = offsetof(Vertex, uv);
+		modelLayout.mAttribs[2].mOffset = offsetof(Vertex, Tangent);
+
+		modelLayout.mAttribs[3].mSemantic = SEMANTIC_TEXCOORD0;
+		modelLayout.mAttribs[3].mFormat = TinyImageFormat_R32G32B32A32_SFLOAT;
+		modelLayout.mAttribs[3].mBinding = 0;
+		modelLayout.mAttribs[3].mLocation = 3;
+		modelLayout.mAttribs[3].mOffset = offsetof(Vertex, uv);
 		
 
 		GeometryLoadDesc loadDesc = {};
-		loadDesc.pFileName = "octane.gltf";
+		loadDesc.pFileName = "matBall.gltf";
 		loadDesc.ppGeometry = &pModelGeo;
 		loadDesc.pVertexLayout = &modelLayout;
 		addResource(&loadDesc, NULL);
@@ -260,8 +318,8 @@ public:
 
 		// Initialize Camera and Model Matrix
 		pCamera = tf_placement_new<Camera>(tf_calloc(1, sizeof(Camera)));
-		*pCamera = Camera(Vector3(0.0f, 0.0f, -5.0f),
-			Vector3(0.0f, 0.0f, 1.0f),
+		*pCamera = Camera(Vector3(-8.0f, 0.0f, 0.0f),
+			Vector3(1.0f, 0.0f, 0.0f),
 			"persp",
 			0.1f,
 			1000.0f,
@@ -271,7 +329,7 @@ public:
 			-Vector3(PI / 2.0f, PI / 2.0f, 0.0f),
 			Vector3(PI / 2.0f, PI / 2.0f, 0.0f));
 
-		pModelMatrix = Matrix4::rotationY(PI / 2.0f);
+		pModelMatrix = Matrix4::rotationY(PI / 2.0f) * Matrix4::scale(Vector3(0.5f));
 
 		// Input system
 		InputSystemDesc inputDesc = {};
@@ -339,7 +397,13 @@ public:
 		removeResource(pVertexBufferQuad);
 		removeResource(pModelGeo);
 
-		//removeResource(halftoneTexture);
+		
+		removeResource(gMaterial.albedo);
+		removeResource(gMaterial.metallic);
+		removeResource(gMaterial.roughness);
+		removeResource(gMaterial.ao);
+		removeResource(gMaterial.normal);
+
 		removeSampler(pRenderer, pSampler);
 
 		//for (uint32_t i = 0; i < gSamplerCount; i++) {
@@ -428,7 +492,9 @@ public:
 		{
 			removeSwapChain(pRenderer, pSwapChain);
 			removeRenderTarget(pRenderer, pDepthBuffer);
-			removeRenderTarget(pRenderer, pRenderTargetIntermediate);
+			for (int i = 0; i < GBUFFER_RT_COUNT; i++) {
+				removeRenderTarget(pRenderer, pRenderTargetGBuffer[i]);
+			}
 		}
 
 		if (pReloadDesc->mType & RELOAD_TYPE_SHADER)
@@ -440,16 +506,16 @@ public:
 	}
 
 	void addShaders() {
-		ShaderLoadDesc depthPassthrough = {};
-		depthPassthrough.mStages[0] = { "depth_passthrough.vert", NULL, 0, NULL, SHADER_STAGE_LOAD_FLAG_NONE };
-		depthPassthrough.mStages[1] = { "depth_passthrough.frag", NULL, 0 };
+		ShaderLoadDesc gpass = {};
+		gpass.mStages[0] = { "gpass.vert", NULL, 0, NULL, SHADER_STAGE_LOAD_FLAG_NONE };
+		gpass.mStages[1] = { "gpass.frag", NULL, 0 };
 
-		ShaderLoadDesc blueprint = {};
-		blueprint.mStages[0] = { "blueprint.vert", NULL, 0, NULL, SHADER_STAGE_LOAD_FLAG_NONE };
-		blueprint.mStages[1] = { "blueprint.frag", NULL, 0 };
+		ShaderLoadDesc pbr = {};
+		pbr.mStages[0] = { "pbr.vert", NULL, 0, NULL, SHADER_STAGE_LOAD_FLAG_NONE };
+		pbr.mStages[1] = { "pbr.frag", NULL, 0 };
 
-		addShader(pRenderer, &depthPassthrough, &pGPassShader);
-		addShader(pRenderer, &blueprint, &pPBRShader);
+		addShader(pRenderer, &gpass, &pGPassShader);
+		addShader(pRenderer, &pbr, &pPBRShader);
 	}
 
 	void removeShaders() {
@@ -477,15 +543,20 @@ public:
 
 	void addDescriptorSets() {
 		DescriptorSetDesc desc1 = { pRootSignature, DESCRIPTOR_UPDATE_FREQ_NONE, 1 };
-		addDescriptorSet(pRenderer, &desc1, &pDescriptorSetTextures);
-		DescriptorSetDesc desc2 = { pRootSignature, DESCRIPTOR_UPDATE_FREQ_PER_FRAME, gImageCount };
-		addDescriptorSet(pRenderer, &desc2, &pDescriptorSetUniforms);
+		addDescriptorSet(pRenderer, &desc1, &pDescriptorSetGBuffer);
+
+		DescriptorSetDesc desc2 = { pRootSignature, DESCRIPTOR_UPDATE_FREQ_NONE, 1 };
+		addDescriptorSet(pRenderer, &desc2, &pDescriptorSetMaterial);
+
+		DescriptorSetDesc desc3 = { pRootSignature, DESCRIPTOR_UPDATE_FREQ_PER_FRAME, gImageCount };
+		addDescriptorSet(pRenderer, &desc3, &pDescriptorSetUniforms);
 	}
 
 	void removeDescriptorSets()
 	{
-		removeDescriptorSet(pRenderer, pDescriptorSetTextures);
+		removeDescriptorSet(pRenderer, pDescriptorSetGBuffer);
 		removeDescriptorSet(pRenderer, pDescriptorSetUniforms);
+		removeDescriptorSet(pRenderer, pDescriptorSetMaterial);
 	}
 
 	bool addSwapChain() {
@@ -526,7 +597,7 @@ public:
 	{
 		//layout and pipeline
 		VertexLayout vertexLayout = {};
-		vertexLayout.mAttribCount = 3;
+		vertexLayout.mAttribCount = 4;
 		vertexLayout.mAttribs[0].mSemantic = SEMANTIC_POSITION;
 		vertexLayout.mAttribs[0].mFormat = TinyImageFormat_R32G32B32A32_SFLOAT;
 		vertexLayout.mAttribs[0].mBinding = 0;
@@ -539,31 +610,38 @@ public:
 		vertexLayout.mAttribs[1].mLocation = 1;
 		vertexLayout.mAttribs[1].mOffset = offsetof(Vertex, Normal);
 
-		vertexLayout.mAttribs[2].mSemantic = SEMANTIC_TEXCOORD0;
+		vertexLayout.mAttribs[2].mSemantic = SEMANTIC_TANGENT;
 		vertexLayout.mAttribs[2].mFormat = TinyImageFormat_R32G32B32A32_SFLOAT;
 		vertexLayout.mAttribs[2].mBinding = 0;
 		vertexLayout.mAttribs[2].mLocation = 2;
-		vertexLayout.mAttribs[2].mOffset = offsetof(Vertex, uv);
+		vertexLayout.mAttribs[2].mOffset = offsetof(Vertex, Tangent);
+
+		vertexLayout.mAttribs[3].mSemantic = SEMANTIC_TEXCOORD0;
+		vertexLayout.mAttribs[3].mFormat = TinyImageFormat_R32G32B32A32_SFLOAT;
+		vertexLayout.mAttribs[3].mBinding = 0;
+		vertexLayout.mAttribs[3].mLocation = 2;
+		vertexLayout.mAttribs[3].mOffset = offsetof(Vertex, uv);
 
 
 		RasterizerStateDesc modelRasterizerStateDesc = {};
-		modelRasterizerStateDesc.mCullMode = CULL_MODE_FRONT;
-		modelRasterizerStateDesc.mFillMode = FILL_MODE_WIREFRAME;
+		modelRasterizerStateDesc.mCullMode = CULL_MODE_NONE;
 
 		DepthStateDesc depthStateDesc = {};
 		depthStateDesc.mDepthTest = true;
 		depthStateDesc.mDepthWrite = true;
-		depthStateDesc.mDepthFunc = CMP_GEQUAL;
+		depthStateDesc.mDepthFunc = CMP_LEQUAL;
 
 		PipelineDesc desc = {};
 		desc.mType = PIPELINE_TYPE_GRAPHICS;
+
+
 		GraphicsPipelineDesc& pipelineSettings = desc.mGraphicsDesc;
 		pipelineSettings.mPrimitiveTopo = PRIMITIVE_TOPO_TRI_LIST;
-		pipelineSettings.mRenderTargetCount = 1;
+		pipelineSettings.mRenderTargetCount = 3;
 		pipelineSettings.pDepthState = &depthStateDesc;
-		pipelineSettings.pColorFormats = &pRenderTargetIntermediate->mFormat;
-		pipelineSettings.mSampleCount = pRenderTargetIntermediate->mSampleCount;
-		pipelineSettings.mSampleQuality = pRenderTargetIntermediate->mSampleQuality;
+		pipelineSettings.pColorFormats = gGBufferColorFormats;
+		pipelineSettings.mSampleCount = pRenderTargetGBuffer[0]->mSampleCount;
+		pipelineSettings.mSampleQuality = pRenderTargetGBuffer[0]->mSampleQuality;
 		pipelineSettings.mDepthStencilFormat = pDepthBuffer->mFormat;
 		pipelineSettings.pRootSignature = pRootSignature;
 		pipelineSettings.pShaderProgram = pGPassShader;
@@ -575,7 +653,7 @@ public:
 
 		// 2nd pipeline
 
-		modelRasterizerStateDesc.mFillMode = FILL_MODE_SOLID;
+		pipelineSettings.mRenderTargetCount = 1;
 		pipelineSettings.pColorFormats = &pSwapChain->ppRenderTargets[0]->mFormat;
 		pipelineSettings.mSampleCount = pSwapChain->ppRenderTargets[0]->mSampleCount;
 		pipelineSettings.mSampleQuality = pSwapChain->ppRenderTargets[0]->mSampleQuality;
@@ -618,10 +696,37 @@ public:
 			updateDescriptorSet(pRenderer, i, pDescriptorSetUniforms, 1, params);
 		}
 
-		DescriptorData params[1] = {};
-		params[0].pName = "DepthTexture";
-		params[0].ppTextures = &pRenderTargetIntermediate->pTexture;
-		updateDescriptorSet(pRenderer, 0, pDescriptorSetTextures, 1, params);
+		DescriptorData params2[5] = {};
+		params2[0].pName = "AlbedoTexture";
+		params2[0].ppTextures = &gMaterial.albedo;
+
+		params2[1].pName = "MetallicTexture";
+		params2[1].ppTextures = &gMaterial.metallic;
+
+		params2[2].pName = "RoughnessTexture";
+		params2[2].ppTextures = &gMaterial.roughness;
+
+		params2[3].pName = "AOTexture";
+		params2[3].ppTextures = &gMaterial.ao;
+
+		params2[4].pName = "NormalTexture";
+		params2[4].ppTextures = &gMaterial.normal;
+		updateDescriptorSet(pRenderer, 0, pDescriptorSetMaterial, 5, params2);
+
+
+		DescriptorData params[3] = {};
+		params[0].pName = "AlbedoTexture";
+		params[0].ppTextures = &pRenderTargetGBuffer[0]->pTexture;
+
+		params[1].pName = "MaterialPropsTexture";
+		params[1].ppTextures = &pRenderTargetGBuffer[1]->pTexture;
+
+		params[2].pName = "NormalDepthTexture";
+		params[2].ppTextures = &pRenderTargetGBuffer[2]->pTexture;
+
+		updateDescriptorSet(pRenderer, 0, pDescriptorSetGBuffer, 3, params);
+
+
 	}
 	
 	bool addIntermediateRenderTarget()
@@ -629,19 +734,26 @@ public:
 		// Add depth buffer
 		RenderTargetDesc rtDesc = {};
 		rtDesc.mArraySize = 1;
-		rtDesc.mClearValue = { { 0.001f, 0.001f, 0.001f, 0.001f } }; // This is a temporary workaround for AMD cards on macOS. Setting this to (0,0,0,0) will introduce weird behavior.
+		rtDesc.mClearValue = { { 0.0f, 0.0f, 0.0f, 0.0f } };
 		rtDesc.mDepth = 1;
 		rtDesc.mDescriptors = DESCRIPTOR_TYPE_TEXTURE;
-		rtDesc.mFormat = TinyImageFormat_R32G32B32A32_SFLOAT;
 		rtDesc.mStartState = RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 		rtDesc.mHeight = mSettings.mHeight;
-		rtDesc.mSampleCount = SAMPLE_COUNT_1;
-		rtDesc.mSampleQuality = 0;
 		rtDesc.mWidth = mSettings.mWidth;
+		rtDesc.mSampleQuality = 0;
+		rtDesc.mSampleCount = SAMPLE_COUNT_1;
 		rtDesc.mFlags = TEXTURE_CREATION_FLAG_VR_MULTIVIEW;
-		addRenderTarget(pRenderer, &rtDesc, &pRenderTargetIntermediate);
+		rtDesc.pName = "GBuffer RTs";
 
-		return pRenderTargetIntermediate != NULL;
+
+
+		for (int i = 0; i < GBUFFER_RT_COUNT; i++) {
+			rtDesc.mFormat = gGBufferColorFormats[i];
+			addRenderTarget(pRenderer, &rtDesc, &pRenderTargetGBuffer[i]);
+		}
+
+
+		return pRenderTargetGBuffer != NULL;
 	}
 
 	void Update(float deltaTime) {
@@ -656,20 +768,34 @@ public:
 
 		gUniformData.mModel = pModelMatrix;
 		gUniformData.mView = mView;
-		gUniformData.mProjection = mProj;
-		gUniformData.ScreenDimsWorldDims = Vector4(mSettings.mWidth, mSettings.mHeight, 4.0f, 4.0f);
-		//gUniformData.mOrthoProjection = mat4::orthographic(-1.0f * pCamera->aspect_ratio, 1.0f * pCamera->aspect_ratio, -1.0f, 1.0f, 0.0f, 1.0f);
+		gUniformData.mProj = mProj;
 
-		//memset(gUniformData.mLightDirections, 0, sizeof gUniformData.mLightDirections);
-		////for (int i = 0; i < 8; i++) {
-		////	gUniformData.mLightDirections[i] = Vector4((i & 1 ? -1.0f : 1.0f), 
-		////											   (i >> 1 & 1 ? -1.0f : 1.0f), 
-		////											   (i >> 2 & 1 ? -1.0f : 1.0f),
-		////												1.0f);	
-		////}
-		//gUniformData.mLightDirections[0] = Vector4(-2.0f, -1.0f, 1.0f, 1.0f);
-		//gUniformData.mLightDirections[1] = Vector4(2.0f, 1.0f, 1.0f, 1.0f);
-		//gUniformData.mCameraPosition = Vector4(pCamera->position, 0.0f);
+
+		Vector4 res = mProj * mView * pModelMatrix * Vector4(-1, 0, 1, 1);
+
+		gUniformData.mModelInv = inverse(gUniformData.mModel);
+		gUniformData.mViewInv = inverse(gUniformData.mView);
+		gUniformData.mProjInv = inverse(gUniformData.mProj);
+
+		gUniformData.cameraPosition = Vector4(pCamera->position, 1.0f);
+
+		gUniformData.ScreenDims = Vector4(mSettings.mWidth, mSettings.mHeight, 1.0f, 1.0f);
+
+		gUniformData.lights[0].position = Vector3(-1, 0, 0);
+		gUniformData.lights[0].attenuation = 3.0f;
+		gUniformData.lights[0].baseColor = Vector4(1.0f, 1.0f, 0.6f, 1.0f);
+
+		gUniformData.lights[1].position = Vector3(4, 0, 0);
+		gUniformData.lights[1].attenuation = 3.0f;
+		gUniformData.lights[1].baseColor = Vector4(1.0f, 1.0f, 0.6f, 1.0f);
+
+		gUniformData.lights[2].position = Vector3(0, 0, -2);
+		gUniformData.lights[2].attenuation = 3.0f;
+		gUniformData.lights[2].baseColor = Vector4(1.0f, 1.0f, 0.6f, 1.0f);
+
+		gUniformData.lights[3].position = Vector3(0, 0, 3);
+		gUniformData.lights[3].attenuation = 3.0f;
+		gUniformData.lights[3].baseColor = Vector4(1.0f, 1.0f, 0.6f, 1.0f);
 	}
 
 	void Draw() {
@@ -697,34 +823,39 @@ public:
 		*(UniformBlock*)viewProjCbv.pMappedData = gUniformData;
 		endUpdateResource(&viewProjCbv, NULL);
 
-		RenderTarget* pRenderTarget = pRenderTargetIntermediate;
+		RenderTarget** pRenderTargets = pRenderTargetGBuffer;
 		RenderTarget* pScreenRenderTarget = pSwapChain->ppRenderTargets[swapchainImageIndex];
 		Semaphore*    pRenderCompleteSemaphore = pRenderCompleteSemaphores[gFrameIndex];
 		Fence*        pRenderCompleteFence = pRenderCompleteFences[gFrameIndex];
 
 		LoadActionsDesc loadActions = {};
-		loadActions.mLoadActionsColor[0] = LOAD_ACTION_CLEAR;
-		loadActions.mLoadActionDepth = LOAD_ACTION_CLEAR;
-		loadActions.mClearColorValues[0] = pRenderTarget->mClearValue;
+		for (int i = 0; i < GBUFFER_RT_COUNT; i++) {
+			loadActions.mLoadActionsColor[i] = LOAD_ACTION_CLEAR;
+			loadActions.mLoadActionDepth = LOAD_ACTION_CLEAR;
+			loadActions.mClearColorValues[i] = pRenderTargets[i]->mClearValue;
+		}
 
 		Cmd* cmd = pCmds[gFrameIndex];
 		beginCmd(cmd);
 
 		RenderTargetBarrier barriers[] = {
-			{ pRenderTarget, RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RESOURCE_STATE_RENDER_TARGET },
+			{ pRenderTargets[0], RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RESOURCE_STATE_RENDER_TARGET },
+			{ pRenderTargets[1], RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RESOURCE_STATE_RENDER_TARGET },
+			{ pRenderTargets[2], RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RESOURCE_STATE_RENDER_TARGET },
 			{ pScreenRenderTarget, RESOURCE_STATE_PRESENT, RESOURCE_STATE_RENDER_TARGET },
 		};
 
-		cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 2, barriers);
+		cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 4, barriers);
 
 		// simply record the screen cleaning command
-		loadActions.mClearDepth.depth = 0.0f;
-		cmdBindRenderTargets(cmd, 1, &pRenderTarget, pDepthBuffer, &loadActions, NULL, NULL, -1, -1);
-		cmdSetViewport(cmd, 0.0f, 0.0f, (float)pRenderTarget->mWidth, (float)pRenderTarget->mHeight, 1.0f, 0.0f);
-		cmdSetScissor(cmd, 0, 0, pRenderTarget->mWidth, pRenderTarget->mHeight);
+		loadActions.mClearDepth.depth = 1.0f;
+		cmdBindRenderTargets(cmd, GBUFFER_RT_COUNT, pRenderTargets, pDepthBuffer, &loadActions, NULL, NULL, -1, -1);
+		cmdSetViewport(cmd, 0.0f, 0.0f, (float)pRenderTargets[0]->mWidth, (float)pRenderTargets[0]->mHeight, 0.0f, 1.0f);
+		cmdSetScissor(cmd, 0, 0, pRenderTargets[0]->mWidth, pRenderTargets[0]->mHeight);
 
 		const uint32_t modelVbStride = sizeof(Vertex);
 		cmdBindDescriptorSet(cmd, gFrameIndex, pDescriptorSetUniforms);
+		cmdBindDescriptorSet(cmd, 0, pDescriptorSetMaterial);
 		cmdBindPipeline(cmd, pGPassPipeline);
 
 		cmdBindVertexBuffer(cmd, 1, &pModelGeo->pVertexBuffers[0], pModelGeo->mVertexStrides, NULL);
@@ -734,9 +865,11 @@ public:
 
 		cmdBindRenderTargets(cmd, 0, NULL, NULL, NULL, NULL, NULL, -1, -1);
 		RenderTargetBarrier srvBarrier[] = {
-			{ pRenderTarget, RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_PIXEL_SHADER_RESOURCE },
+			{ pRenderTargets[0], RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_PIXEL_SHADER_RESOURCE },
+			{ pRenderTargets[1], RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_PIXEL_SHADER_RESOURCE },
+			{ pRenderTargets[2], RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_PIXEL_SHADER_RESOURCE },
 		};
-		cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 1, srvBarrier);
+		cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 3, srvBarrier);
 
 		loadActions.mLoadActionsColor[0] = LOAD_ACTION_CLEAR;
 		loadActions.mLoadActionDepth = LOAD_ACTION_DONTCARE;
@@ -746,7 +879,7 @@ public:
 		const uint32_t quadStride = sizeof(QuadVertex);
 		cmdBindPipeline(cmd, pPBRPipeline);
 		cmdBindDescriptorSet(cmd, gFrameIndex, pDescriptorSetUniforms);
-		cmdBindDescriptorSet(cmd, 0, pDescriptorSetTextures);
+		cmdBindDescriptorSet(cmd, 0, pDescriptorSetGBuffer);
 		cmdBindVertexBuffer(cmd, 1, &pVertexBufferQuad, &quadStride, NULL);
 		cmdDrawInstanced(cmd, 6, 0, 2, 0);
 
@@ -790,7 +923,7 @@ public:
 		gFrameIndex = (gFrameIndex + 1) % gImageCount;
 	}
 
-	const char* GetName() { return "40_Blueprint"; }
+	const char* GetName() { return "41_DeferredPBR"; }
 };
 
-DEFINE_APPLICATION_MAIN(Test)
+DEFINE_APPLICATION_MAIN(DeferredPBR)

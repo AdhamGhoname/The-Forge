@@ -25,18 +25,29 @@
 #ifndef RESOURCES_H
 #define RESOURCES_H
 
-// UPDATE_FREQ_NONE
-#ifdef BLUEPRINT_SHADER
-	RES(Tex2D(float4), DepthTexture, UPDATE_FREQ_NONE, t1, binding = 1);
-	RES(SamplerState,  uSampler0, UPDATE_FREQ_NONE, s0, binding = 2);
-#endif
+#define POINT_LIGHT_COUNT 4
+
+
+struct PointLight {
+	float3 position;
+	float attenuation;
+	float4 baseColor;
+};
 
 CBUFFER(uniformBlock, UPDATE_FREQ_PER_FRAME, b0, binding = 0)
 {
     DATA(float4x4, mModel, None);
     DATA(float4x4, mView, None);
     DATA(float4x4, mProj, None);
-	DATA(float4, ScreenDimsWorldDims, None);
+
+	DATA(float4x4, mModelInv, None);
+    DATA(float4x4, mViewInv, None);
+    DATA(float4x4, mProjInv, None);
+
+	DATA(float4, cameraPosition, None);
+	DATA(float4, ScreenDims, None);
+
+	DATA(PointLight, lights[POINT_LIGHT_COUNT], None);
 };
 
 #endif
