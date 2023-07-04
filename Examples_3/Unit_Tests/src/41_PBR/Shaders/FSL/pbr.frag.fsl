@@ -80,9 +80,6 @@ float4 PS_MAIN( VSOutput In )
 	uint2 packed_uint = LoadTex2D(Get(GBuffer), 0, index, 0).xy;
 
 	FragInfo info = Unpack(packed_uint, In.UV.rg);
-	//info.albedo = f3(0.5f);
-	//info.roughness = 0.0f;
-	//info.metallic = 0.0f;
 
 	float3 view = normalize(Get(cameraPosition.xyz) - info.worldPosition);
 
@@ -120,7 +117,7 @@ float4 PS_MAIN( VSOutput In )
 		color += result;
 	}
 
-	float3 ambient = f3(0.03f) * info.albedo; //* info.ao;
+	float3 ambient = f3(0.03f) * info.albedo;
 	color += ambient;
 
 	color = color / (color + f3(1.0f));

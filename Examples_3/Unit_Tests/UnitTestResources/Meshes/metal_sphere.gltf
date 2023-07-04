@@ -20,7 +20,7 @@
     ],
     "meshes" : [
         {
-            "name" : "Sphere.001",
+            "name" : "Sphere",
             "primitives" : [
                 {
                     "attributes" : {
@@ -38,14 +38,14 @@
         {
             "bufferView" : 0,
             "componentType" : 5126,
-            "count" : 65280,
+            "count" : 261632,
             "max" : [
-                0.9999995827674866,
                 1,
-                0.9999992251396179
+                1,
+                1
             ],
             "min" : [
-                -0.9999986886978149,
+                -1,
                 -1,
                 -1
             ],
@@ -54,58 +54,58 @@
         {
             "bufferView" : 1,
             "componentType" : 5126,
-            "count" : 65280,
+            "count" : 261632,
             "type" : "VEC3"
         },
         {
             "bufferView" : 2,
             "componentType" : 5126,
-            "count" : 65280,
+            "count" : 261632,
             "type" : "VEC4"
         },
         {
             "bufferView" : 3,
             "componentType" : 5126,
-            "count" : 65280,
+            "count" : 261632,
             "type" : "VEC2"
         },
         {
             "bufferView" : 4,
-            "componentType" : 5123,
-            "count" : 97536,
+            "componentType" : 5125,
+            "count" : 391680,
             "type" : "SCALAR"
         }
     ],
     "bufferViews" : [
         {
             "buffer" : 0,
-            "byteLength" : 783360,
+            "byteLength" : 3139584,
             "byteOffset" : 0
         },
         {
             "buffer" : 0,
-            "byteLength" : 783360,
-            "byteOffset" : 783360
+            "byteLength" : 3139584,
+            "byteOffset" : 3139584
         },
         {
             "buffer" : 0,
-            "byteLength" : 1044480,
-            "byteOffset" : 1566720
+            "byteLength" : 4186112,
+            "byteOffset" : 6279168
         },
         {
             "buffer" : 0,
-            "byteLength" : 522240,
-            "byteOffset" : 2611200
+            "byteLength" : 2093056,
+            "byteOffset" : 10465280
         },
         {
             "buffer" : 0,
-            "byteLength" : 195072,
-            "byteOffset" : 3133440
+            "byteLength" : 1566720,
+            "byteOffset" : 12558336
         }
     ],
     "buffers" : [
         {
-            "byteLength" : 3328512,
+            "byteLength" : 14125056,
             "uri" : "metal_sphere.bin"
         }
     ]
