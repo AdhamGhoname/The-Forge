@@ -43,14 +43,8 @@ STRUCT(VSOutput)
 	DATA(float4, UV, TEXCOORD);
 };
 
-STRUCT(PSOutput)
-{
-	DATA(float4, Albedo, SV_Target0);
-	DATA(float4, MaterialProps, SV_Target1);
-	DATA(float4, NormalDepth, SV_Target2);
-};
-
 float3 SampleNormalFromMap(VSOutput In) {
+
 	float3 N = normalize(In.Normal.xyz);
 	float3 T = normalize(In.Tangent.xyz);
 	T = normalize(T - dot(T, N) * N);
@@ -58,11 +52,10 @@ float3 SampleNormalFromMap(VSOutput In) {
 	float3 B = cross(N, T);
 
 	float3x3 TBN = float3x3(T, B, N);
-	float3 sampledNormal = SampleTex2D(Get(NormalTexture), Get(uSampler0), In.UV.rg).xyz;
+	float3 sampledNormal = saturate(SampleTex2D(Get(NormalTexture), Get(uSampler0), In.UV.rg).xyz);
 	sampledNormal = sampledNormal * 2.0f - 1.0f;
-	float3 normal = normalize(mul(TBN, sampledNormal));
-	normal = (normal + 1.0f) / 2.0f;
-	return normal.xyz;
+	float3 normal = normalize(mul(TBN, sampledNormal) + 9.0f * N);
+	return normal;
 }
 
 float3 NormalFromVertexAttrib(VSOutput In) {
@@ -71,23 +64,29 @@ float3 NormalFromVertexAttrib(VSOutput In) {
 	return normal;
 }
 
+
 PSOutput PS_MAIN( VSOutput In )
 {
     INIT_MAIN;
 	float depth = In.Position.z;
 
-    float4 albedo = SampleTex2D(Get(AlbedoTexture), Get(uSampler0), In.UV.rg);
-	float metallic = SampleTex2D(Get(MetallicTexture), Get(uSampler0), In.UV.rg).r;
-	float roughness = SampleTex2D(Get(RoughnessTexture), Get(uSampler0), In.UV.rg).r;
+    float4 albedo = saturate(SampleTex2D(Get(AlbedoTexture), Get(uSampler0), In.UV.rg));
+	float metallic = saturate(SampleTex2D(Get(MetallicTexture), Get(uSampler0), In.UV.rg).r);
+	float roughness = saturate(SampleTex2D(Get(RoughnessTexture), Get(uSampler0), In.UV.rg).r);
 	float ao = SampleTex2D(Get(AOTexture), Get(uSampler0), In.UV.rg).r;
 
-	float3 normal = NormalFromVertexAttrib(In) + 0.0000001f * SampleNormalFromMap(In);
-	//float3 normal = SampleNormalFromMap(In);
+	//float3 normal = NormalFromVertexAttrib(In) + 0.0000001f * SampleNormalFromMap(In);
+	float3 normal = SampleNormalFromMap(In);
 
-	PSOutput Out;
-	Out.Albedo = albedo;
-	Out.MaterialProps = float4(metallic, roughness, ao, 1.0f);
-	Out.NormalDepth = float4(normal, depth);
+
+	GBufferProps props;
+	props.albedo = albedo.rgb + ao * 0.001f;
+	props.metallic = metallic;
+	props.roughness = roughness;
+	props.normals = normal;
+	props.depth = depth;
+
+	PSOutput Out = Pack(props);
 
     RETURN(Out);
 }

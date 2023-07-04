@@ -23,7 +23,7 @@
 #include "../../../../Common_3/Utilities/Math/MathTypes.h"
 #include "../../../../Common_3/Utilities/Interfaces/IMemory.h"
 
-#define GBUFFER_RT_COUNT 3
+#define GBUFFER_RT_COUNT 1
 #define POINT_LIGHT_COUNT 4
 
 struct PointLight {
@@ -99,9 +99,9 @@ UniformBlock     gUniformData;
 Camera* pCamera;
 UIComponent*    pGuiWindow = NULL;
 
-TinyImageFormat gGBufferColorFormats[] = { TinyImageFormat_R32G32B32A32_SFLOAT,
-								TinyImageFormat_R32G32B32A32_SFLOAT,
-								TinyImageFormat_R32G32B32A32_SFLOAT };
+TinyImageFormat gGBufferColorFormats[] = { TinyImageFormat_R32G32_UINT, };
+								//TinyImageFormat_R32G32B32A32_SFLOAT,
+								//TinyImageFormat_R32G32B32A32_SFLOAT };
 
 static float gThreshold = -0.2f;
 
@@ -182,12 +182,13 @@ public:
 
 
 
-		SamplerDesc samplerDesc = { FILTER_NEAREST,
-									FILTER_NEAREST,
+		SamplerDesc samplerDesc = { FILTER_LINEAR,
+									FILTER_LINEAR,
 									MIPMAP_MODE_NEAREST,
 									ADDRESS_MODE_REPEAT,
 									ADDRESS_MODE_REPEAT,
 									ADDRESS_MODE_REPEAT };
+
 		addSampler(pRenderer, &samplerDesc, &pSampler);
 
 		// Define the geometry for a triangle.
@@ -233,7 +234,7 @@ public:
 		textureDesc.mContainer = TEXTURE_CONTAINER_BASIS;
 		addResource(&textureDesc, NULL);
 
-		textureDesc.pFileName = "PBR/metal_0002_normal_directx_4k";
+		textureDesc.pFileName = "PBR/metal_0002_normal_opengl_4k";
 		textureDesc.ppTexture = &gMaterial.normal;
 		textureDesc.mCreationFlag = TEXTURE_CREATION_FLAG_SRGB;
 		textureDesc.mContainer = TEXTURE_CONTAINER_BASIS;
@@ -715,18 +716,10 @@ public:
 
 
 		DescriptorData params[3] = {};
-		params[0].pName = "AlbedoTexture";
+		params[0].pName = "GBuffer";
 		params[0].ppTextures = &pRenderTargetGBuffer[0]->pTexture;
 
-		params[1].pName = "MaterialPropsTexture";
-		params[1].ppTextures = &pRenderTargetGBuffer[1]->pTexture;
-
-		params[2].pName = "NormalDepthTexture";
-		params[2].ppTextures = &pRenderTargetGBuffer[2]->pTexture;
-
-		updateDescriptorSet(pRenderer, 0, pDescriptorSetGBuffer, 3, params);
-
-
+		updateDescriptorSet(pRenderer, 0, pDescriptorSetGBuffer, 1, params);
 	}
 	
 	bool addIntermediateRenderTarget()
@@ -734,7 +727,7 @@ public:
 		// Add depth buffer
 		RenderTargetDesc rtDesc = {};
 		rtDesc.mArraySize = 1;
-		rtDesc.mClearValue = { { 0.0f, 0.0f, 0.0f, 0.0f } };
+		rtDesc.mClearValue = { 0 };
 		rtDesc.mDepth = 1;
 		rtDesc.mDescriptors = DESCRIPTOR_TYPE_TEXTURE;
 		rtDesc.mStartState = RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -779,7 +772,7 @@ public:
 
 		gUniformData.cameraPosition = Vector4(pCamera->position, 1.0f);
 
-		gUniformData.ScreenDims = Vector4(mSettings.mWidth, mSettings.mHeight, 1.0f, 1.0f);
+		gUniformData.ScreenDims = Vector4((float)mSettings.mWidth, (float)mSettings.mHeight, 1.0f, 1.0f);
 
 		gUniformData.lights[0].position = Vector3(-1, 0, 0);
 		gUniformData.lights[0].attenuation = 3.0f;
@@ -840,12 +833,10 @@ public:
 
 		RenderTargetBarrier barriers[] = {
 			{ pRenderTargets[0], RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RESOURCE_STATE_RENDER_TARGET },
-			{ pRenderTargets[1], RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RESOURCE_STATE_RENDER_TARGET },
-			{ pRenderTargets[2], RESOURCE_STATE_PIXEL_SHADER_RESOURCE, RESOURCE_STATE_RENDER_TARGET },
 			{ pScreenRenderTarget, RESOURCE_STATE_PRESENT, RESOURCE_STATE_RENDER_TARGET },
 		};
 
-		cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 4, barriers);
+		cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 2, barriers);
 
 		// simply record the screen cleaning command
 		loadActions.mClearDepth.depth = 1.0f;
@@ -866,10 +857,8 @@ public:
 		cmdBindRenderTargets(cmd, 0, NULL, NULL, NULL, NULL, NULL, -1, -1);
 		RenderTargetBarrier srvBarrier[] = {
 			{ pRenderTargets[0], RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_PIXEL_SHADER_RESOURCE },
-			{ pRenderTargets[1], RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_PIXEL_SHADER_RESOURCE },
-			{ pRenderTargets[2], RESOURCE_STATE_RENDER_TARGET, RESOURCE_STATE_PIXEL_SHADER_RESOURCE },
 		};
-		cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 3, srvBarrier);
+		cmdResourceBarrier(cmd, 0, NULL, 0, NULL, 1, srvBarrier);
 
 		loadActions.mLoadActionsColor[0] = LOAD_ACTION_CLEAR;
 		loadActions.mLoadActionDepth = LOAD_ACTION_DONTCARE;

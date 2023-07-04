@@ -27,7 +27,6 @@
 
 #define POINT_LIGHT_COUNT 4
 
-
 struct PointLight {
 	float3 position;
 	float attenuation;
@@ -49,5 +48,85 @@ CBUFFER(uniformBlock, UPDATE_FREQ_PER_FRAME, b0, binding = 0)
 
 	DATA(PointLight, lights[POINT_LIGHT_COUNT], None);
 };
+
+
+STRUCT(PSOutput)
+{
+	DATA(uint2, packed, SV_Target0);
+};
+
+struct GBufferProps {
+	float3 albedo;
+	float metallic;
+	float roughness;
+	float3 normals;
+	float depth;
+};
+
+uint PackNormalOct(float3 normal) {
+    normal /= (abs(normal.x) + abs(normal.y) + abs(normal.z));  // Project onto octahedron
+    normal.xy = (normal.xy + 1.0f) / 2.0f * 255.0f;
+    uint packedNormal = uint(round(normal.y)) << 8 | uint(round(normal.x));
+    return packedNormal;
+}
+
+PSOutput Pack(const GBufferProps props) {
+	PSOutput Out = {u2(0)};
+
+	uint3 albedo = uint3(round(props.albedo * 255.0f));
+	Out.packed.x |= (albedo.r << 24 | albedo.g << 16 | albedo.b << 8);
+
+	uint2 met_rough = uint2(round(float2(props.metallic, props.roughness) * 15.0f));
+	Out.packed.x |= (met_rough.r << 4 | met_rough.g);
+
+	uint depth = uint(round(props.depth * 65535.0f));
+	Out.packed.y |= (depth << 16);
+
+	uint normals = PackNormalOct(props.normals);
+	Out.packed.y |= normals;
+
+	return Out;
+}
+
+struct FragInfo {
+	float3 albedo;
+	float metallic;
+	float roughness;
+	float3 normal;
+	float3 worldPosition;
+};
+
+float3 UnpackNormalOct(uint packedNormal) {
+    float3 normal = float3(float(packedNormal & 0xFF), float((packedNormal >> 8) & 0xFF), 0.0f);
+    normal.xy /= 255.0f * 0.5f;  // Scale to [-1,1] range
+	normal.xy -= 1.0f;
+    normal.z = 1.0f - abs(normal.x) - abs(normal.y);  // Reconstruct z component
+    return normalize(normal);
+}
+
+FragInfo Unpack(uint2 In, float2 uv) {
+	FragInfo info;
+	float2 fragCoord = uv;
+
+	info.albedo = float3(
+		(In.x >> 24) / 255.0f,
+		((In.x >> 16) & 0xFF) / 255.0f,
+		((In.x >> 8) & 0xFF) / 255.0f
+	);
+	info.metallic = ((In.x >> 4) & 0xF) / 15.0f;
+	info.roughness = (In.x & 0xF) / 15.0f;
+
+	uint packedNormal = In.y & 0xFFFF;
+
+	info.normal = UnpackNormalOct(packedNormal);
+
+	float depth = (In.y >> 16) / 65535.0f;
+
+	float4 projPos = float4(fragCoord.x * 2.0f - 1.0f, (1.0f - fragCoord.y) * 2.0f - 1.0f, depth, 1.0f);
+	float4 worldPos = mul(Get(mViewInv), mul(Get(mProjInv), projPos));
+	info.worldPosition = worldPos.xyz / max(0.0001f, worldPos.w);
+
+	return info;
+}
 
 #endif

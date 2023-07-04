@@ -27,10 +27,7 @@
 #define PI 3.14159265359f
 
 
-RES(Tex2D(float4), AlbedoTexture, UPDATE_FREQ_NONE, t1, binding = 1);
-RES(Tex2D(float4), MaterialPropsTexture, UPDATE_FREQ_NONE, t2, binding = 1);
-RES(Tex2D(float4), NormalDepthTexture, UPDATE_FREQ_NONE, t3, binding = 1);
-
+RES(Tex2D(uint2), GBuffer, UPDATE_FREQ_NONE, t1, binding = 1);
 RES(SamplerState,  uSampler0, UPDATE_FREQ_NONE, s0, binding = 2);
 
 
@@ -39,42 +36,6 @@ STRUCT(VSOutput)
 	DATA(float4, Position, SV_Position);
 	DATA(float4, UV,   TEXCOORD);
 };
-
-struct FragInfo {
-	float3 albedo;
-	float metallic;
-	float roughness;
-	float ao;
-	float3 normal;
-	float3 worldPosition;
-};
-
-FragInfo Unpack(VSOutput In) {
-	FragInfo result;
-
-	float2 fragCoord = In.Position.xy / Get(ScreenDims.xy);
-
-	result.albedo = saturate(SampleTex2D(Get(AlbedoTexture), Get(uSampler0), fragCoord).rgb);
-	result.metallic = saturate(SampleTex2D(Get(MaterialPropsTexture), Get(uSampler0), fragCoord).r);
-	result.roughness = SampleTex2D(Get(MaterialPropsTexture), Get(uSampler0), fragCoord).g;
-	result.ao = saturate(SampleTex2D(Get(MaterialPropsTexture), Get(uSampler0), fragCoord).b);
-
-	result.normal = SampleTex2D(Get(NormalDepthTexture), Get(uSampler0), fragCoord).rgb;
-	result.normal = normalize(result.normal * 2.0f - 1.0f);
-
-
-
-	float depth = SampleTex2D(Get(NormalDepthTexture), Get(uSampler0), fragCoord).a;
-
-
-	float4 projPos = float4(fragCoord.x * 2.0f - 1.0f, (1.0f - fragCoord.y) * 2.0f - 1.0f, depth, 1.0f);
-	float4 worldPos = mul(Get(mViewInv), mul(Get(mProjInv), projPos));
-
-
-	result.worldPosition = worldPos.xyz / max(0.0001f, worldPos.w);
-
-	return result;
-}
 
 float DistributionGGX(float3 N, float3 H, float roughness)
 {
@@ -115,7 +76,13 @@ float4 PS_MAIN( VSOutput In )
 {
     INIT_MAIN;
 
-	FragInfo info = Unpack(In);
+	uint2 index = uint2(round(In.UV.xy * Get(ScreenDims.xy)));
+	uint2 packed_uint = LoadTex2D(Get(GBuffer), 0, index, 0).xy;
+
+	FragInfo info = Unpack(packed_uint, In.UV.rg);
+	//info.albedo = f3(0.5f);
+	//info.roughness = 0.0f;
+	//info.metallic = 0.0f;
 
 	float3 view = normalize(Get(cameraPosition.xyz) - info.worldPosition);
 
@@ -153,7 +120,7 @@ float4 PS_MAIN( VSOutput In )
 		color += result;
 	}
 
-	float3 ambient = f3(0.03f) * info.albedo * info.ao;
+	float3 ambient = f3(0.03f) * info.albedo; //* info.ao;
 	color += ambient;
 
 	color = color / (color + f3(1.0f));
@@ -162,13 +129,6 @@ float4 PS_MAIN( VSOutput In )
 
 	float4 Out = f4(0.0f);
 	Out += float4(color, 1.0f);
-	Out += 0.000001f * f4(info.metallic);
-	Out += 0.000001f * f4(info.roughness);
-	Out += 0.000001f * f4(info.ao);
-	Out += 0.000001f * float4(info.normal, 0.0f);
-	Out += 0.000001f * float4(info.worldPosition, 0.0f);
-	//Out += 0.000001f * float4(color, 1.0f);
-
 
     RETURN(Out);
 }
