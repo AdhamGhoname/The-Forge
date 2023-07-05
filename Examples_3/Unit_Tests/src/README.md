@@ -11,7 +11,7 @@ A simple halftone shader applied to the iconic Rocket League Octane.
 
 
 ## 40_Blueprint
-A blueprint effect using and wireframe rendering.
+A blueprint effect using wireframe rendering.
 ![Showcase](./ReadmeResources/blueprint0.png)
 ![Showcase](./ReadmeResources/blueprint1.png)
 
